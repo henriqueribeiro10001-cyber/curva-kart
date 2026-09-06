@@ -318,19 +318,21 @@ button.primary:disabled {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  padding: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, #3a3f4d, #2a2e38);
+  border-radius: 28px 28px 0 0;
+  box-shadow: inset 0 3px 10px rgba(255,255,255,0.06), inset 0 -3px 10px rgba(0,0,0,0.3);
 }
 
 .steer-col {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  justify-content: center;
 }
 
 .steer-btn, .throttle-btn, .item-btn {
   border: none;
-  border-radius: 20px;
-  font-size: 20px;
   font-weight: 800;
   color: white;
   display: flex;
@@ -341,41 +343,61 @@ button.primary:disabled {
 
 .steer-btn {
   flex: 1;
-  background: var(--panel);
-  font-size: 42px;
+  max-height: 120px;
+  background: radial-gradient(circle at 35% 30%, #6b7280, #383c47 70%);
+  font-size: 40px;
+  border-radius: 50%;
+  box-shadow: 0 4px 0 #1c1e24, inset 0 2px 4px rgba(255,255,255,0.15);
 }
 
 .steer-btn:active {
-  background: #35405c;
+  background: radial-gradient(circle at 35% 30%, #5a616f, #2c2f38 70%);
+  box-shadow: 0 1px 0 #1c1e24, inset 0 2px 4px rgba(0,0,0,0.3);
+  transform: translateY(3px);
 }
 
 .action-col {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
 }
 
 .throttle-btn {
   flex: 3;
-  background: var(--grass-dark);
+  width: 100%;
+  background: radial-gradient(circle at 35% 30%, #8fe0a0, #2f8f5b 70%);
+  border-radius: 50%;
+  font-size: 18px;
+  box-shadow: 0 6px 0 #1c5c3a, inset 0 3px 6px rgba(255,255,255,0.25);
 }
 
 .throttle-btn:active {
-  background: var(--grass);
+  background: radial-gradient(circle at 35% 30%, #7cd090, #256e46 70%);
+  box-shadow: 0 2px 0 #1c5c3a, inset 0 3px 6px rgba(0,0,0,0.2);
+  transform: translateY(4px);
 }
 
 .item-btn {
   flex: 1;
-  background: var(--curb-red);
+  width: 78%;
+  background: radial-gradient(circle at 35% 30%, #ff8a7e, #c8392e 70%);
+  border-radius: 50%;
+  font-size: 14px;
+  box-shadow: 0 4px 0 #8a251c, inset 0 2px 4px rgba(255,255,255,0.25);
 }
 
 .item-btn:active {
-  background: #ff6a5e;
+  background: radial-gradient(circle at 35% 30%, #ff6a5e, #b02e24 70%);
+  box-shadow: 0 1px 0 #8a251c, inset 0 2px 4px rgba(0,0,0,0.2);
+  transform: translateY(3px);
 }
 
 .item-btn:disabled {
   background: #4a4f5e;
   color: var(--ink-dim);
+  box-shadow: 0 4px 0 #33363f;
 }
 
 .join-form {
