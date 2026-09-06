@@ -1,0 +1,388 @@
+:root {
+  --asphalt: #1c2130;
+  --asphalt-deep: #12151f;
+  --curb-red: #e7473c;
+  --curb-white: #f4f1e6;
+  --grass: #2f8f5b;
+  --grass-dark: #256f47;
+  --sun: #ffcf4d;
+  --ink: #f4f1e6;
+  --ink-dim: #a9adc0;
+  --panel: #232838;
+  font-family: 'Rubik', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--asphalt-deep);
+  color: var(--ink);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+@font-face {
+  font-family: 'Rubik';
+  src: local('Arial');
+}
+
+h1, h2, h3 {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 18px 24px;
+}
+
+.brand .badge {
+  background: var(--sun);
+  color: var(--asphalt-deep);
+  font-weight: 800;
+  font-size: 13px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  transform: rotate(-3deg);
+}
+
+.brand h1 {
+  font-size: 22px;
+}
+
+/* ---------- Host / lobby ---------- */
+
+.lobby {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 207, 77, 0.08), transparent 40%),
+    var(--asphalt-deep);
+}
+
+.lobby-card {
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 32px 40px;
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+
+.join-code {
+  font-size: 54px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--sun);
+  line-height: 1;
+}
+
+.join-code-label {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin-bottom: 6px;
+}
+
+#qr-canvas {
+  background: white;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.player-slots {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 640px;
+}
+
+.slot-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 600;
+  min-width: 140px;
+}
+
+.slot-chip .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.slot-chip.empty {
+  opacity: 0.45;
+  border-style: dashed;
+  border-color: var(--ink-dim);
+}
+
+button.primary {
+  background: var(--curb-red);
+  color: white;
+  border: none;
+  padding: 16px 36px;
+  border-radius: 14px;
+  font-size: 19px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 0 #a92e26;
+  transition: transform 0.05s ease;
+}
+
+button.primary:active {
+  transform: translateY(6px);
+  box-shadow: 0 2px 0 #a92e26;
+}
+
+button.primary:disabled {
+  background: #4a4f5e;
+  box-shadow: 0 8px 0 #33374a;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hint {
+  color: var(--ink-dim);
+  font-size: 14px;
+  max-width: 420px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ---------- Race screen ---------- */
+
+.race-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#track-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--grass);
+}
+
+.hud {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  font-weight: 700;
+}
+
+.hud .lap-counter {
+  background: rgba(18, 21, 31, 0.75);
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 18px;
+}
+
+.standings {
+  background: rgba(18, 21, 31, 0.75);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  min-width: 150px;
+}
+
+.standings .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.standings .row .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 140px;
+  font-weight: 800;
+  color: var(--sun);
+  text-shadow: 0 8px 0 rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+
+.results {
+  position: absolute;
+  inset: 0;
+  background: rgba(18, 21, 31, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.results ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.results li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  padding: 10px 24px;
+  border-radius: 12px;
+  min-width: 260px;
+}
+
+.results li .place {
+  color: var(--sun);
+  width: 28px;
+}
+
+/* ---------- Controller ---------- */
+
+.controller {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.controller-status {
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.controller-status.connected { color: #7ce07c; }
+.controller-status.error { color: var(--curb-red); }
+
+.pad {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px;
+}
+
+.steer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.steer-btn, .throttle-btn, .item-btn {
+  border: none;
+  border-radius: 20px;
+  font-size: 20px;
+  font-weight: 800;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.steer-btn {
+  flex: 1;
+  background: var(--panel);
+  font-size: 42px;
+}
+
+.steer-btn:active {
+  background: #35405c;
+}
+
+.action-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.throttle-btn {
+  flex: 3;
+  background: var(--grass-dark);
+}
+
+.throttle-btn:active {
+  background: var(--grass);
+}
+
+.item-btn {
+  flex: 1;
+  background: var(--curb-red);
+}
+
+.item-btn:active {
+  background: #ff6a5e;
+}
+
+.item-btn:disabled {
+  background: #4a4f5e;
+  color: var(--ink-dim);
+}
+
+.join-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.join-form input {
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 0.1em;
+  padding: 14px;
+  border-radius: 12px;
+  border: 2px solid var(--panel);
+  background: var(--asphalt);
+  color: var(--ink);
+  width: 220px;
+  text-transform: uppercase;
+}
+
+.join-form input:focus {
+  outline: 2px solid var(--sun);
+}
