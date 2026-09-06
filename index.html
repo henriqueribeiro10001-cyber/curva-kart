@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Curva Kart — Tela da corrida</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="brand">
+  <span class="badge">P2P · SEM SERVIDOR</span>
+  <h1>Curva Kart</h1>
+</div>
+
+<div id="lobby" class="lobby">
+  <div class="lobby-card">
+    <div>
+      <div class="join-code-label">Código da sala</div>
+      <div class="join-code" id="join-code">----</div>
+    </div>
+    <canvas id="qr-canvas" width="140" height="140"></canvas>
+  </div>
+
+  <div class="player-slots" id="player-slots"></div>
+
+  <button class="primary" id="start-btn" disabled>Aguardando jogadores…</button>
+  <p class="hint">
+    Abra <strong id="controller-url-hint">controller.html</strong> no celular, ou aponte a câmera
+    para o QR code, para entrar como piloto. Vagas livres viram karts controlados pelo computador.
+  </p>
+</div>
+
+<div id="race" class="race-wrap" style="display:none;">
+  <canvas id="track-canvas"></canvas>
+  <div class="hud">
+    <div class="lap-counter" id="lap-counter">Volta 1 / 3</div>
+    <div class="standings" id="standings"></div>
+  </div>
+  <div class="countdown" id="countdown" style="display:none;"></div>
+</div>
+
+<div id="results" class="results" style="display:none;">
+  <h2>Resultado final</h2>
+  <ol id="results-list"></ol>
+  <button class="primary" id="restart-btn">Corrida revanche</button>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="js/track.js"></script>
+<script src="js/kart.js"></script>
+<script src="js/host.js"></script>
+</body>
+</html>

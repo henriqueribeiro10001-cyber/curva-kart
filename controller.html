@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Curva Kart — Controle</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="brand">
+  <span class="badge">CONTROLE</span>
+  <h1>Curva Kart</h1>
+</div>
+
+<div id="status" class="controller-status">Conectando…</div>
+
+<div id="join-form" class="join-form" style="display:none;">
+  <p class="hint">Digite o código mostrado na tela principal.</p>
+  <input id="code-input" maxlength="4" placeholder="ABCD" autocapitalize="characters" />
+  <button class="primary" id="join-btn">Entrar na corrida</button>
+</div>
+
+<div id="pad" class="pad" style="display:none;">
+  <div class="steer-col">
+    <button class="steer-btn" id="left-btn">◀</button>
+    <button class="steer-btn" id="right-btn">▶</button>
+  </div>
+  <div class="action-col">
+    <button class="throttle-btn" id="gas-btn">ACELERAR</button>
+    <button class="item-btn" id="item-btn" disabled>ITEM</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="js/controller.js"></script>
+</body>
+</html>
