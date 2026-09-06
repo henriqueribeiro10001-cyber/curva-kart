@@ -32,9 +32,10 @@ const el = {
   resultsList: document.getElementById('results-list'),
   restartBtn: document.getElementById('restart-btn'),
   controllerUrlHint: document.getElementById('controller-url-hint'),
+  minimapCanvas: document.getElementById('minimap-canvas'),
 };
 
-const ctx = el.trackCanvas.getContext('2d');
+const minimapCtx = el.minimapCanvas.getContext('2d');
 
 // ---------------------------------------------------------------- Peer setup
 
@@ -164,6 +165,10 @@ function startRace() {
   el.lobby.style.display = 'none';
   el.results.style.display = 'none';
   el.race.style.display = 'block';
+
+  if (!scene) initScene3D();
+  buildKartMeshes();
+  buildItemBoxMeshes();
   resizeCanvas();
 
   broadcast({ type: 'race-start' });
@@ -209,7 +214,7 @@ function loop(ts) {
     if (state.phase === 'racing') {
       updateSimulation(dt);
     }
-    render();
+    render(dt);
   }
 
   if (state.phase !== 'finished') {
@@ -323,153 +328,298 @@ function finishRace() {
   });
 }
 
-// ---------------------------------------------------------------- Rendering
+// ---------------------------------------------------------------- Rendering (Three.js, 3rd-person chase cam on kart 0)
+
+let scene, camera, renderer;
+let kartGroups = [];
+let itemBoxMeshes = [];
+const bananaMeshes = new Map();
+const bananaGeo = new THREE.SphereGeometry(9, 10, 8);
+const bananaMat = new THREE.MeshStandardMaterial({ color: '#f2d024' });
+
+const CAM_BACK = 68;
+const CAM_HEIGHT = 32;
+const CAM_LOOK_AHEAD = 45;
+const CAM_LOOK_HEIGHT = 12;
+const camPos = new THREE.Vector3();
+const camLook = new THREE.Vector3();
+let camReady = false;
+
+function toWorld(x, y) {
+  return new THREE.Vector3(x - TRACK.WIDTH / 2, 0, y - TRACK.HEIGHT / 2);
+}
+
+function ribbonGeometry(width, yOffset) {
+  const pts = TRACK.points;
+  const n = pts.length;
+  const positions = [];
+  const indices = [];
+  for (let i = 0; i <= n; i++) {
+    const idx = i % n;
+    const p = pts[idx];
+    const h = TRACK.headingAt(idx);
+    const nx = Math.cos(h + Math.PI / 2);
+    const ny = Math.sin(h + Math.PI / 2);
+    const l = toWorld(p.x - nx * width / 2, p.y - ny * width / 2);
+    const r = toWorld(p.x + nx * width / 2, p.y + ny * width / 2);
+    positions.push(l.x, yOffset, l.z, r.x, yOffset, r.z);
+  }
+  for (let i = 0; i < n; i++) {
+    const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+    indices.push(a, c, b, b, c, d);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function makeNameSprite(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const c2 = canvas.getContext('2d');
+  c2.fillStyle = 'rgba(18,21,31,0.75)';
+  c2.fillRect(0, 0, 256, 64);
+  c2.fillStyle = '#f4f1e6';
+  c2.font = 'bold 30px sans-serif';
+  c2.textAlign = 'center';
+  c2.textBaseline = 'middle';
+  c2.fillText(text, 128, 34);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  sprite.scale.set(26, 6.5, 1);
+  return sprite;
+}
+
+function initScene3D() {
+  renderer = new THREE.WebGLRenderer({ canvas: el.trackCanvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color('#7ec9ef');
+  scene.fog = new THREE.Fog('#7ec9ef', 500, 1500);
+
+  camera = new THREE.PerspectiveCamera(62, 1, 1, 3000);
+
+  scene.add(new THREE.HemisphereLight('#bfe3ff', '#2f8f5b', 0.95));
+  const sun = new THREE.DirectionalLight('#fff6df', 1.0);
+  sun.position.set(300, 500, 200);
+  scene.add(sun);
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(6000, 6000),
+    new THREE.MeshStandardMaterial({ color: '#2f8f5b' })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.05;
+  scene.add(ground);
+
+  // Curb + asphalt ribbons.
+  scene.add(new THREE.Mesh(ribbonGeometry(TRACK.TRACK_WIDTH + 26, 0), new THREE.MeshStandardMaterial({ color: '#e7473c' })));
+  scene.add(new THREE.Mesh(ribbonGeometry(TRACK.TRACK_WIDTH, 0.4), new THREE.MeshStandardMaterial({ color: '#33384a' })));
+
+  // Start/finish stripe.
+  const startP = TRACK.pointAt(TRACK.startIndex);
+  const startH = TRACK.headingAt(TRACK.startIndex);
+  const stripe = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, TRACK.TRACK_WIDTH),
+    new THREE.MeshStandardMaterial({ color: '#f4f1e6' })
+  );
+  stripe.rotation.x = -Math.PI / 2;
+  stripe.rotation.z = -startH;
+  const sw = toWorld(startP.x, startP.y);
+  stripe.position.set(sw.x, 0.5, sw.z);
+  scene.add(stripe);
+
+  buildDecoration();
+}
+
+function buildDecoration() {
+  const treeGeo = new THREE.ConeGeometry(14, 34, 7);
+  const trunkGeo = new THREE.CylinderGeometry(3, 3, 10, 6);
+  const treeMat = new THREE.MeshStandardMaterial({ color: '#2e7d46' });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b3a21' });
+  const step = 6;
+  for (let i = 0; i < TRACK.points.length; i += step) {
+    const p = TRACK.points[i];
+    const h = TRACK.headingAt(i);
+    const nx = Math.cos(h + Math.PI / 2);
+    const ny = Math.sin(h + Math.PI / 2);
+    const dist = TRACK.TRACK_WIDTH / 2 + 55;
+    [1, -1].forEach((side) => {
+      if (Math.random() < 0.55) return; // sparse, not every point
+      const wp = toWorld(p.x + nx * dist * side, p.y + ny * dist * side);
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.set(wp.x, 5, wp.z);
+      scene.add(trunk);
+      const top = new THREE.Mesh(treeGeo, treeMat);
+      top.position.set(wp.x, 27, wp.z);
+      scene.add(top);
+    });
+  }
+}
+
+function buildKartMeshes() {
+  kartGroups.forEach((g) => scene.remove(g));
+  kartGroups = state.karts.map((kart) => {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: kart.color });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(34, 10, 20), bodyMat);
+    body.position.set(0, 9, 0);
+    group.add(body);
+
+    const driver = new THREE.Mesh(
+      new THREE.SphereGeometry(6.5, 12, 12),
+      new THREE.MeshStandardMaterial({ color: '#f4f1e6' })
+    );
+    driver.position.set(-4, 18, 0);
+    group.add(driver);
+
+    const wheelMat = new THREE.MeshStandardMaterial({ color: '#181a20' });
+    [[12, 4, 9], [12, 4, -9], [-12, 4, 9], [-12, 4, -9]].forEach(([x, y, z]) => {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 5, 10), wheelMat);
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(x, y, z);
+      group.add(wheel);
+    });
+
+    const nameSprite = makeNameSprite(kart.name);
+    nameSprite.position.set(0, 32, 0);
+    group.add(nameSprite);
+    group.userData.body = body;
+    group.userData.driver = driver;
+
+    scene.add(group);
+    return group;
+  });
+}
+
+function buildItemBoxMeshes() {
+  itemBoxMeshes.forEach((m) => scene.remove(m));
+  const geo = new THREE.BoxGeometry(18, 18, 18);
+  const mat = new THREE.MeshStandardMaterial({ color: '#ffd23f' });
+  itemBoxMeshes = state.itemBoxes.map((box) => {
+    const mesh = new THREE.Mesh(geo, mat);
+    const wp = toWorld(box.x, box.y);
+    mesh.position.set(wp.x, 12, wp.z);
+    scene.add(mesh);
+    return mesh;
+  });
+}
+
+function syncBananaMeshes() {
+  for (const [banana, mesh] of bananaMeshes) {
+    if (!state.bananas.includes(banana)) {
+      scene.remove(mesh);
+      bananaMeshes.delete(banana);
+    }
+  }
+  for (const banana of state.bananas) {
+    if (!bananaMeshes.has(banana)) {
+      const mesh = new THREE.Mesh(bananaGeo, bananaMat);
+      scene.add(mesh);
+      bananaMeshes.set(banana, mesh);
+    }
+    const wp = toWorld(banana.x, banana.y);
+    bananaMeshes.get(banana).position.set(wp.x, 5, wp.z);
+  }
+}
+
+function updateChaseCamera(dt) {
+  const kart = state.karts[0]; // fixed: always follows player 1's kart
+  if (!kart) return;
+  const wp = toWorld(kart.x, kart.y);
+  const dirX = Math.cos(kart.angle);
+  const dirZ = Math.sin(kart.angle);
+
+  const desiredPos = new THREE.Vector3(wp.x - dirX * CAM_BACK, CAM_HEIGHT, wp.z - dirZ * CAM_BACK);
+  const desiredLook = new THREE.Vector3(wp.x + dirX * CAM_LOOK_AHEAD, CAM_LOOK_HEIGHT, wp.z + dirZ * CAM_LOOK_AHEAD);
+
+  if (!camReady) {
+    camPos.copy(desiredPos);
+    camLook.copy(desiredLook);
+    camReady = true;
+  } else {
+    const t = 1 - Math.pow(0.0005, dt); // frame-rate independent smoothing
+    camPos.lerp(desiredPos, t);
+    camLook.lerp(desiredLook, t);
+  }
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+}
+
+function render(dt) {
+  updateChaseCamera(dt);
+
+  for (let i = 0; i < state.karts.length; i++) {
+    const kart = state.karts[i];
+    const group = kartGroups[i];
+    if (!group) continue;
+    const wp = toWorld(kart.x, kart.y);
+    group.position.set(wp.x, 0, wp.z);
+    group.rotation.y = -kart.angle;
+
+    const flicker = kart.stunTimer > 0 ? 0.5 + 0.5 * Math.sin(performance.now() / 40) : 1;
+    group.userData.body.material.opacity = flicker;
+    group.userData.body.material.transparent = kart.stunTimer > 0;
+  }
+
+  itemBoxMeshes.forEach((mesh, i) => {
+    const box = state.itemBoxes[i];
+    mesh.visible = box.active;
+    mesh.rotation.y += dt * 1.6;
+    mesh.position.y = 12 + Math.sin(performance.now() / 300 + i) * 2;
+  });
+
+  syncBananaMeshes();
+
+  renderer.render(scene, camera);
+  renderMinimap();
+}
+
+function renderMinimap() {
+  const w = el.minimapCanvas.width;
+  const h = el.minimapCanvas.height;
+  const scale = Math.min(w / (TRACK.WIDTH + 60), h / (TRACK.HEIGHT + 60));
+  const offsetX = (w - TRACK.WIDTH * scale) / 2;
+  const offsetY = (h - TRACK.HEIGHT * scale) / 2;
+
+  minimapCtx.clearRect(0, 0, w, h);
+  minimapCtx.save();
+  minimapCtx.translate(offsetX, offsetY);
+  minimapCtx.scale(scale, scale);
+
+  minimapCtx.strokeStyle = 'rgba(244,241,230,0.85)';
+  minimapCtx.lineWidth = 10;
+  minimapCtx.lineJoin = 'round';
+  minimapCtx.beginPath();
+  TRACK.points.forEach((p, i) => (i === 0 ? minimapCtx.moveTo(p.x, p.y) : minimapCtx.lineTo(p.x, p.y)));
+  minimapCtx.closePath();
+  minimapCtx.stroke();
+
+  for (const kart of state.karts) {
+    minimapCtx.fillStyle = kart.color;
+    minimapCtx.beginPath();
+    minimapCtx.arc(kart.x, kart.y, 14, 0, Math.PI * 2);
+    minimapCtx.fill();
+  }
+
+  minimapCtx.restore();
+}
 
 function resizeCanvas() {
   const rect = el.race.getBoundingClientRect();
-  el.trackCanvas.width = rect.width;
-  el.trackCanvas.height = rect.height;
+  if (!renderer) return;
+  renderer.setSize(rect.width, rect.height, false);
+  camera.aspect = rect.width / rect.height;
+  camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', () => {
   if (el.race.style.display !== 'none') resizeCanvas();
 });
-
-function worldToScreen() {
-  const scale = Math.min(
-    el.trackCanvas.width / (TRACK.WIDTH + 200),
-    el.trackCanvas.height / (TRACK.HEIGHT + 200)
-  );
-  const offsetX = (el.trackCanvas.width - TRACK.WIDTH * scale) / 2;
-  const offsetY = (el.trackCanvas.height - TRACK.HEIGHT * scale) / 2;
-  return { scale, offsetX, offsetY };
-}
-
-function render() {
-  const { scale, offsetX, offsetY } = worldToScreen();
-  const w = el.trackCanvas.width;
-  const h = el.trackCanvas.height;
-
-  ctx.fillStyle = '#2f8f5b';
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.save();
-  ctx.translate(offsetX, offsetY);
-  ctx.scale(scale, scale);
-
-  // Track surface.
-  drawTrackShape(TRACK.TRACK_WIDTH + 26, '#e7473c'); // curb (red edge)
-  drawTrackShape(TRACK.TRACK_WIDTH, '#33384a'); // asphalt
-
-  // Dashed centerline.
-  ctx.strokeStyle = 'rgba(244,241,230,0.4)';
-  ctx.lineWidth = 4;
-  ctx.setLineDash([16, 16]);
-  ctx.beginPath();
-  TRACK.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-  ctx.closePath();
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Start/finish line.
-  const startP = TRACK.pointAt(TRACK.startIndex);
-  const startHeading = TRACK.headingAt(TRACK.startIndex);
-  ctx.save();
-  ctx.translate(startP.x, startP.y);
-  ctx.rotate(startHeading);
-  ctx.fillStyle = '#f4f1e6';
-  ctx.fillRect(-4, -TRACK.TRACK_WIDTH / 2, 8, TRACK.TRACK_WIDTH);
-  ctx.restore();
-
-  // Item boxes.
-  for (const box of state.itemBoxes) {
-    if (!box.active) continue;
-    ctx.save();
-    ctx.translate(box.x, box.y);
-    ctx.fillStyle = '#ffd23f';
-    ctx.strokeStyle = '#a97e00';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(-16, -16, 32, 32, 6);
-    } else {
-      ctx.rect(-16, -16, 32, 32);
-    }
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#a97e00';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('?', 0, 1);
-    ctx.restore();
-  }
-
-  // Bananas.
-  for (const b of state.bananas) {
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.fillStyle = '#f2d024';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 12, 7, Math.PI / 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Karts.
-  for (const kart of state.karts) {
-    drawKart(kart);
-  }
-
-  ctx.restore();
-}
-
-function drawTrackShape(width, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  TRACK.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-  ctx.closePath();
-  ctx.lineWidth = width;
-  ctx.strokeStyle = color;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.stroke();
-}
-
-function drawKart(kart) {
-  ctx.save();
-  ctx.translate(kart.x, kart.y);
-  ctx.rotate(kart.angle);
-
-  if (kart.stunTimer > 0) {
-    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(performance.now() / 40);
-  }
-  if (kart.boostTimer > 0) {
-    ctx.fillStyle = 'rgba(255,170,60,0.6)';
-    ctx.beginPath();
-    ctx.ellipse(-22, 0, 14, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.fillStyle = kart.color;
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(16, 0);
-  ctx.lineTo(-12, 10);
-  ctx.lineTo(-12, -10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.restore();
-
-  ctx.save();
-  ctx.fillStyle = 'rgba(18,21,31,0.8)';
-  ctx.font = 'bold 13px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(kart.name, kart.x, kart.y - 22);
-  ctx.restore();
-}
 
 // ---------------------------------------------------------------- Boot
 
