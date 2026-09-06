@@ -417,15 +417,47 @@ function initScene3D() {
   scene.add(ground);
 
   // Curb + asphalt ribbons.
-  scene.add(new THREE.Mesh(ribbonGeometry(TRACK.TRACK_WIDTH + 26, 0), new THREE.MeshStandardMaterial({ color: '#e7473c' })));
-  scene.add(new THREE.Mesh(ribbonGeometry(TRACK.TRACK_WIDTH, 0.4), new THREE.MeshStandardMaterial({ color: '#33384a' })));
+  scene.add(new THREE.Mesh(ribbonGeometry(TRACK.TRACK_WIDTH + 26, 0), new THREE.MeshStandardMaterial({ color: '#e7473c', side: THREE.DoubleSide })));
+  scene.add(new THREE.Mesh(ribbonGeometry(TRACK.TRACK_WIDTH, 0.4), new THREE.MeshStandardMaterial({ color: '#33384a', side: THREE.DoubleSide })));
+
+  // Dashed centerline stripe pairs, alternating along the track.
+  const dashMat = new THREE.MeshStandardMaterial({ color: '#f4f1e6', side: THREE.DoubleSide });
+  for (let i = 0; i < TRACK.points.length; i += 6) {
+    if (Math.floor(i / 6) % 2 !== 0) continue;
+    const p = TRACK.points[i];
+    const h = TRACK.headingAt(i);
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.5), dashMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.rotation.z = -h;
+    const wp = toWorld(p.x, p.y);
+    dash.position.set(wp.x, 0.5, wp.z);
+    scene.add(dash);
+  }
+
+  // Checkered pattern band alongside the outer curb, more visual noise like a real track.
+  const checkerMat1 = new THREE.MeshStandardMaterial({ color: '#f4f1e6', side: THREE.DoubleSide });
+  const checkerMat2 = new THREE.MeshStandardMaterial({ color: '#181a20', side: THREE.DoubleSide });
+  for (let i = 0; i < TRACK.points.length; i += 10) {
+    const p = TRACK.points[i];
+    const h = TRACK.headingAt(i);
+    const nx = Math.cos(h + Math.PI / 2);
+    const ny = Math.sin(h + Math.PI / 2);
+    const dist = TRACK.TRACK_WIDTH / 2 + 40;
+    const mat = Math.floor(i / 10) % 2 === 0 ? checkerMat1 : checkerMat2;
+    const block = new THREE.Mesh(new THREE.PlaneGeometry(14, 12), mat);
+    block.rotation.x = -Math.PI / 2;
+    block.rotation.z = -h;
+    const wp = toWorld(p.x + nx * dist, p.y + ny * dist);
+    block.position.set(wp.x, 0.3, wp.z);
+    scene.add(block);
+  }
 
   // Start/finish stripe.
   const startP = TRACK.pointAt(TRACK.startIndex);
   const startH = TRACK.headingAt(TRACK.startIndex);
   const stripe = new THREE.Mesh(
     new THREE.PlaneGeometry(8, TRACK.TRACK_WIDTH),
-    new THREE.MeshStandardMaterial({ color: '#f4f1e6' })
+    new THREE.MeshStandardMaterial({ color: '#f4f1e6', side: THREE.DoubleSide })
   );
   stripe.rotation.x = -Math.PI / 2;
   stripe.rotation.z = -startH;
@@ -449,7 +481,7 @@ function buildDecoration() {
     const ny = Math.sin(h + Math.PI / 2);
     const dist = TRACK.TRACK_WIDTH / 2 + 55;
     [1, -1].forEach((side) => {
-      if (Math.random() < 0.55) return; // sparse, not every point
+      if (Math.random() < 0.25) return; // sparse, not every point
       const wp = toWorld(p.x + nx * dist * side, p.y + ny * dist * side);
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
       trunk.position.set(wp.x, 5, wp.z);
