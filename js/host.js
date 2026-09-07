@@ -537,13 +537,7 @@ function buildKartMeshes() {
     body.position.set(0, 6, 0);
     group.add(body);
 
-    // Nose bumper accent, slightly darker than the body.
-    const bumper = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 6, 16),
-      new THREE.MeshStandardMaterial({ color: '#22242c' })
-    );
-    bumper.position.set(19, 8, 0);
-    group.add(bumper);
+    // ✨ Bumper removido — kart mais limpo e customizado!
 
     // Small rear spoiler.
     const spoiler = new THREE.Mesh(
