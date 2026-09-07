@@ -33,6 +33,7 @@ const el = {
   restartBtn: document.getElementById('restart-btn'),
   controllerUrlHint: document.getElementById('controller-url-hint'),
   minimapCanvas: document.getElementById('minimap-canvas'),
+  viewportLabels: document.getElementById('viewport-labels'),
 };
 
 const minimapCtx = el.minimapCanvas.getContext('2d');
@@ -169,6 +170,7 @@ function startRace() {
   if (!scene) initScene3D();
   buildKartMeshes();
   buildItemBoxMeshes();
+  buildCameraRigs();
   resizeCanvas();
 
   broadcast({ type: 'race-start' });
@@ -330,9 +332,12 @@ function finishRace() {
 
 // ---------------------------------------------------------------- Rendering (Three.js, 3rd-person chase cam on kart 0)
 
-let scene, camera, renderer;
+let scene, renderer;
 let kartGroups = [];
 let itemBoxMeshes = [];
+let cameraRigs = []; // one per human player, in slot order
+let viewW = 0;
+let viewH = 0;
 const bananaMeshes = new Map();
 const bananaGeo = new THREE.SphereGeometry(9, 10, 8);
 const bananaMat = new THREE.MeshStandardMaterial({ color: '#f2d024' });
@@ -341,9 +346,6 @@ const CAM_BACK = 68;
 const CAM_HEIGHT = 32;
 const CAM_LOOK_AHEAD = 45;
 const CAM_LOOK_HEIGHT = 12;
-const camPos = new THREE.Vector3();
-const camLook = new THREE.Vector3();
-let camReady = false;
 
 function toWorld(x, y) {
   return new THREE.Vector3(x - TRACK.WIDTH / 2, 0, y - TRACK.HEIGHT / 2);
@@ -400,8 +402,6 @@ function initScene3D() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color('#7ec9ef');
   scene.fog = new THREE.Fog('#7ec9ef', 500, 1500);
-
-  camera = new THREE.PerspectiveCamera(62, 1, 1, 3000);
 
   scene.add(new THREE.HemisphereLight('#bfe3ff', '#2f8f5b', 0.95));
   const sun = new THREE.DirectionalLight('#fff6df', 1.0);
@@ -529,6 +529,62 @@ function buildKartMeshes() {
   });
 }
 
+function buildCameraRigs() {
+  cameraRigs = [];
+  state.slots.forEach((slot, i) => {
+    if (slot.type !== 'human') return;
+    const kart = state.karts[i];
+    cameraRigs.push({
+      kartIndex: i,
+      name: kart.name,
+      color: kart.color,
+      camera: new THREE.PerspectiveCamera(62, 1, 1, 3000),
+      camPos: new THREE.Vector3(),
+      camLook: new THREE.Vector3(),
+      ready: false,
+    });
+  });
+  updateViewportLabels();
+}
+
+// Splits the canvas into 1/2/3/4 panels, top-left origin (like CSS), one
+// panel per human player. 3-player uses the classic top-two + bottom-wide
+// layout; 4 uses a plain 2x2 grid.
+function viewportLayout(n, w, h) {
+  if (n <= 1) return [{ x: 0, y: 0, w, h }];
+  if (n === 2) return [{ x: 0, y: 0, w, h: h / 2 }, { x: 0, y: h / 2, w, h: h / 2 }];
+  if (n === 3) {
+    return [
+      { x: 0, y: 0, w: w / 2, h: h / 2 },
+      { x: w / 2, y: 0, w: w / 2, h: h / 2 },
+      { x: 0, y: h / 2, w, h: h / 2 },
+    ];
+  }
+  return [
+    { x: 0, y: 0, w: w / 2, h: h / 2 },
+    { x: w / 2, y: 0, w: w / 2, h: h / 2 },
+    { x: 0, y: h / 2, w: w / 2, h: h / 2 },
+    { x: w / 2, y: h / 2, w: w / 2, h: h / 2 },
+  ];
+}
+
+function updateViewportLabels() {
+  if (!el.viewportLabels) return;
+  el.viewportLabels.innerHTML = '';
+  if (!viewW || !viewH || cameraRigs.length <= 1) return; // no clutter for a single full-screen view
+  const rects = viewportLayout(cameraRigs.length, viewW, viewH);
+  cameraRigs.forEach((rig, i) => {
+    const r = rects[i];
+    const tag = document.createElement('div');
+    tag.className = 'viewport-tag';
+    tag.style.left = `${r.x + 10}px`;
+    tag.style.top = `${r.y + 10}px`;
+    tag.style.background = rig.color;
+    tag.textContent = rig.name;
+    el.viewportLabels.appendChild(tag);
+  });
+}
+
 function buildItemBoxMeshes() {
   itemBoxMeshes.forEach((m) => scene.remove(m));
   const geo = new THREE.BoxGeometry(18, 18, 18);
@@ -560,8 +616,8 @@ function syncBananaMeshes() {
   }
 }
 
-function updateChaseCamera(dt) {
-  const kart = state.karts[0]; // fixed: always follows player 1's kart
+function updateChaseCameraForRig(rig, dt) {
+  const kart = state.karts[rig.kartIndex];
   if (!kart) return;
   const wp = toWorld(kart.x, kart.y);
   const dirX = Math.cos(kart.angle);
@@ -570,22 +626,20 @@ function updateChaseCamera(dt) {
   const desiredPos = new THREE.Vector3(wp.x - dirX * CAM_BACK, CAM_HEIGHT, wp.z - dirZ * CAM_BACK);
   const desiredLook = new THREE.Vector3(wp.x + dirX * CAM_LOOK_AHEAD, CAM_LOOK_HEIGHT, wp.z + dirZ * CAM_LOOK_AHEAD);
 
-  if (!camReady) {
-    camPos.copy(desiredPos);
-    camLook.copy(desiredLook);
-    camReady = true;
+  if (!rig.ready) {
+    rig.camPos.copy(desiredPos);
+    rig.camLook.copy(desiredLook);
+    rig.ready = true;
   } else {
     const t = 1 - Math.pow(0.0005, dt); // frame-rate independent smoothing
-    camPos.lerp(desiredPos, t);
-    camLook.lerp(desiredLook, t);
+    rig.camPos.lerp(desiredPos, t);
+    rig.camLook.lerp(desiredLook, t);
   }
-  camera.position.copy(camPos);
-  camera.lookAt(camLook);
+  rig.camera.position.copy(rig.camPos);
+  rig.camera.lookAt(rig.camLook);
 }
 
-function render(dt) {
-  updateChaseCamera(dt);
-
+function updateSceneObjects(dt) {
   for (let i = 0; i < state.karts.length; i++) {
     const kart = state.karts[i];
     const group = kartGroups[i];
@@ -607,8 +661,41 @@ function render(dt) {
   });
 
   syncBananaMeshes();
+}
 
-  renderer.render(scene, camera);
+function render(dt) {
+  if (!renderer || cameraRigs.length === 0) return;
+  updateSceneObjects(dt);
+
+  const n = cameraRigs.length;
+  const GAP = n > 1 ? 4 : 0;
+  const rects = viewportLayout(n, viewW, viewH);
+
+  // Full clear first (scissor off) so the gap between panels reads as a
+  // clean divider rather than leftover pixels from a previous frame.
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, viewW, viewH);
+  renderer.setClearColor('#0c0d11', 1);
+  renderer.clear();
+  renderer.setScissorTest(true);
+
+  cameraRigs.forEach((rig, i) => {
+    const r = rects[i];
+    const x = r.x + GAP / 2;
+    const yTop = r.y + GAP / 2;
+    const pw = Math.max(1, r.w - GAP);
+    const ph = Math.max(1, r.h - GAP);
+    const yGL = viewH - yTop - ph; // three.js viewport/scissor origin is bottom-left
+
+    renderer.setViewport(x, yGL, pw, ph);
+    renderer.setScissor(x, yGL, pw, ph);
+    rig.camera.aspect = pw / ph;
+    rig.camera.updateProjectionMatrix();
+    updateChaseCameraForRig(rig, dt);
+    renderer.render(scene, rig.camera);
+  });
+
+  renderer.setScissorTest(false);
   renderMinimap();
 }
 
@@ -645,9 +732,10 @@ function renderMinimap() {
 function resizeCanvas() {
   const rect = el.race.getBoundingClientRect();
   if (!renderer) return;
-  renderer.setSize(rect.width, rect.height, false);
-  camera.aspect = rect.width / rect.height;
-  camera.updateProjectionMatrix();
+  viewW = rect.width;
+  viewH = rect.height;
+  renderer.setSize(viewW, viewH, false);
+  updateViewportLabels();
 }
 window.addEventListener('resize', () => {
   if (el.race.style.display !== 'none') resizeCanvas();
