@@ -1,6 +1,7 @@
 // kart.js — kart physics, lap tracking, items and collisions.
 
-const KART_COLORS = ['#ff5a4e', '#3fb6ff', '#ffd23f', '#7ce07c'];
+// ✨ CUSTOMIZADO: Cores vibrantes personalizadas (sem padrão Mario Kart)
+const KART_COLORS = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12'];
 
 class Kart {
   constructor(slot, name, isAI) {
